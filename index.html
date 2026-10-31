@@ -1,61 +1,110 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <style>*,*::before,*::after{box-sizing:border-box}[hidden]{display:none!important}body{margin:0}img{max-width:100%}</style>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
-/* Local mode: used only when this file is opened on its own (not from the Claude link). Data stays in this browser on this computer. */
+/* Firebase-backed Rate Book adapter. Firestore syncs business records; photos remain in this browser on the free plan. */
 (function(){
-  if(window.claude&&window.claude.use) return;
-  var KEY='ratebook.local.v1', docs={}, subs=[], nid=0, blobs={}, idb=null, ready=null;
-  window.__localBlobs={};
-  function clone(o){ return JSON.parse(JSON.stringify(o)) }
-  function persist(){ try{ localStorage.setItem(KEY,JSON.stringify(docs)) }catch(e){ throw {code:'quota_exceeded',message:'Browser storage is full'} } }
-  function colOf(p){ var a=p.split('/'); a.pop(); return a.join('/') }
-  function mkDoc(p){ var d=docs[p]; return {id:p.split('/').pop(),exists:!!d,data:function(){ return d?clone(d):undefined },metadata:{fromCache:false,hasPendingWrites:false}} }
-  function snap(col){ var out=[]; Object.keys(docs).forEach(function(p){ if(colOf(p)===col) out.push(mkDoc(p)) }); out.sort(function(a,b){return a.id<b.id?-1:1}); return {docs:out,size:out.length,empty:!out.length,docChanges:function(){return []},metadata:{}} }
-  function notify(col){ subs.forEach(function(s){ if(s.col===col) setTimeout(function(){ s.next(snap(col)) },0) }) }
-  function docRef(p){ return {id:p.split('/').pop(),path:p,
-    get:function(){ return Promise.resolve(mkDoc(p)) },
-    set:function(x){ try{ docs[p]=clone(x); persist() }catch(e){ return Promise.reject(e) } notify(colOf(p)); return Promise.resolve() },
-    update:function(x){ try{ docs[p]=Object.assign({},docs[p],clone(x)); persist() }catch(e){ return Promise.reject(e) } notify(colOf(p)); return Promise.resolve() },
-    delete:function(){ delete docs[p]; try{ persist() }catch(e){} notify(colOf(p)); return Promise.resolve() },
-    onSnapshot:function(n){ var sb={col:colOf(p),next:function(){ n(mkDoc(p)) }}; subs.push(sb); setTimeout(function(){ n(mkDoc(p)) },0); return function(){ subs=subs.filter(function(x){return x!==sb}) } } } }
-  function colRef(c){ return {path:c,
-    doc:function(id){ return docRef(c+'/'+(id||('l'+Date.now().toString(36)+(++nid)+Math.random().toString(36).slice(2,6)))) },
-    add:function(x){ var r=this.doc(); return r.set(x).then(function(){return r}) },
-    onSnapshot:function(next){ var s={col:c,next:next}; subs.push(s); setTimeout(function(){ next(snap(c)) },0); return function(){ subs=subs.filter(function(x){return x!==s}) } },
-    get:function(){ return Promise.resolve(snap(c)) } } }
-  var db={doc:docRef,collection:colRef};
-  function idbOpen(){ return new Promise(function(res){ try{ var r=indexedDB.open('ratebook-local',1); r.onupgradeneeded=function(){ r.result.createObjectStore('photos') }; r.onsuccess=function(){ res(r.result) }; r.onerror=function(){ res(null) } }catch(e){ res(null) } }) }
-  function idbAll(){ return new Promise(function(res){ if(!idb) return res(); try{ var tx=idb.transaction('photos'), st=tx.objectStore('photos'), req=st.openCursor(); req.onsuccess=function(){ var c=req.result; if(c){ blobs[c.key]=c.value; window.__localBlobs[c.key]=URL.createObjectURL(c.value); c.continue() } else res() }; req.onerror=function(){ res() } }catch(e){ res() } }) }
-  var PK='ratebook.photo.';
-  function toData(b){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){ res(r.result) }; r.onerror=function(){ rej({code:'local_error',message:'Could not read the photo'}) }; r.readAsDataURL(b) }) }
-  function fromData(u){ var i=u.indexOf(','), m=/data:([^;]+)/.exec(u), bin=atob(u.slice(i+1)), a=new Uint8Array(bin.length); for(var k=0;k<bin.length;k++) a[k]=bin.charCodeAt(k); return new Blob([a],{type:m?m[1]:'image/jpeg'}) }
-  function lsPhotos(){ try{ for(var i=0;i<localStorage.length;i++){ var k=localStorage.key(i); if(k.indexOf(PK)===0){ var id=k.slice(PK.length), bl=fromData(localStorage.getItem(k)); blobs[id]=bl; window.__localBlobs[id]=URL.createObjectURL(bl) } } }catch(e){} }
-  function idbPut(id,b){
-    var viaLs=function(){ return toData(b).then(function(u){ try{ localStorage.setItem(PK+id,u) }catch(e){ throw {code:'quota_exceeded',message:'Browser storage is full'} } }) };
-    return new Promise(function(res,rej){
-      if(!idb) return rej(1);
-      try{ var tx=idb.transaction('photos','readwrite'); tx.objectStore('photos').put(b,id); tx.oncomplete=res; tx.onerror=function(){ rej(1) }; tx.onabort=function(){ rej(1) } }catch(e){ rej(1) }
-    }).catch(viaLs);
+  var OWNER='sshringars@gmail.com';
+  var firebaseConfig={
+    apiKey:'AIzaSyCAr9l-l15weliZyrqWGJ35ogGFH0aIenk',
+    authDomain:'shubhshringar-ratebook.firebaseapp.com',
+    projectId:'shubhshringar-ratebook',
+    storageBucket:'shubhshringar-ratebook.firebasestorage.app',
+    messagingSenderId:'814610359997',
+    appId:'1:814610359997:web:b18438d665e29904fb39d4'
+  };
+  var app,auth,db,currentUser=null,readyPromise=null,bar=null,statusEl=null,loginBtn=null,logoutBtn=null;
+  window.__localBlobs=window.__localBlobs||{};
+  function ensureBar(){
+    if(bar||!document.body) return;
+    var css=document.createElement('style');
+    css.textContent='.rb-authbar{position:relative;z-index:20;background:#fff4d6;color:#5a4300;padding:10px 16px;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;font:14px/1.4 system-ui,sans-serif;border-bottom:1px solid #ead9aa}.rb-authbar button{border:0;border-radius:20px;padding:8px 16px;background:#8e4a2e;color:white;font-weight:700;cursor:pointer}.rb-authbar button[hidden]{display:none}.rb-authbar .rb-muted{font-size:12px;opacity:.8}';
+    document.head.appendChild(css);
+    bar=document.createElement('div'); bar.className='rb-authbar';
+    statusEl=document.createElement('span'); statusEl.textContent='Connecting to secure cloud storage…';
+    loginBtn=document.createElement('button'); loginBtn.type='button'; loginBtn.textContent='Sign in with Google';
+    logoutBtn=document.createElement('button'); logoutBtn.type='button'; logoutBtn.textContent='Sign out'; logoutBtn.hidden=true;
+    var note=document.createElement('span'); note.className='rb-muted'; note.textContent='Only '+OWNER+' can access this Rate Book. Material photos stay on this device.';
+    bar.append(statusEl,loginBtn,logoutBtn,note); document.body.insertBefore(bar,document.body.firstChild);
+    loginBtn.addEventListener('click',function(){
+      loginBtn.disabled=true; statusEl.textContent='Opening Google sign-in…';
+      auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).then(function(result){
+        if(!result.user || (result.user.email||'').toLowerCase()!==OWNER){
+          return auth.signOut().then(function(){ throw new Error('Please sign in with '+OWNER+'.') });
+        }
+      }).catch(function(e){ statusEl.textContent=(e&&e.message)||'Google sign-in could not be completed. Please try again.'; loginBtn.disabled=false; });
+    });
+    logoutBtn.addEventListener('click',function(){ auth.signOut().then(function(){ location.reload() }) });
   }
-  function idbDel(id){ try{ localStorage.removeItem(PK+id) }catch(e){} return new Promise(function(res){ if(!idb) return res(); var tx=idb.transaction('photos','readwrite'); tx.objectStore('photos').delete(id); tx.oncomplete=res; tx.onerror=res }) }
+  function setStatus(t){ if(statusEl) statusEl.textContent=t }
+  function authReady(){
+    if(readyPromise) return readyPromise;
+    readyPromise=new Promise(function(resolve,reject){
+      try{
+        if(!window.firebase||!firebase.initializeApp) throw new Error('Firebase SDK did not load. Check your internet connection and reload.');
+        app=firebase.apps.length?firebase.app():firebase.initializeApp(firebaseConfig);
+        auth=firebase.auth(); db=firebase.firestore();
+        ensureBar();
+        auth.onAuthStateChanged(function(u){
+          if(u && (u.email||'').toLowerCase()===OWNER && u.emailVerified){
+            currentUser=u; if(loginBtn) loginBtn.hidden=true; if(loginBtn) loginBtn.disabled=false; if(logoutBtn) logoutBtn.hidden=false;
+            setStatus('Connected as '+u.email+' · Cloud sync is active.');
+            migrateLegacy().then(function(){ resolve(true) }).catch(function(e){ console.warn('Legacy migration skipped:',e); resolve(true) });
+          } else {
+            currentUser=null; if(logoutBtn) logoutBtn.hidden=true; if(loginBtn){loginBtn.hidden=false;loginBtn.disabled=false}
+            if(u){ setStatus('Access restricted. Sign in with '+OWNER+'.'); auth.signOut().catch(function(){}); }
+            else setStatus('Sign in to load your cloud Rate Book.');
+          }
+        },function(e){ setStatus('Authentication error: '+(e.message||'Please reload.')); reject(e) });
+      }catch(e){ reject(e) }
+    });
+    return readyPromise;
+  }
+  function migrateLegacy(){
+    var KEY='ratebook.local.v1', old={};
+    try{ old=JSON.parse(localStorage.getItem(KEY)||'{}')||{} }catch(e){ old={} }
+    var paths=Object.keys(old).filter(function(path){ return /^(rates|items|wishes|products|vendors|settings)\/[^/]+$/.test(path) });
+    if(!paths.length) return Promise.resolve();
+    // Import only documents that do not already exist in Firestore; never overwrite cloud records.
+    return paths.reduce(function(chain,path){ return chain.then(function(){
+      var ref=db.doc(path); return ref.get().then(function(snap){ if(!snap.exists) return ref.set(old[path]) });
+    }) },Promise.resolve()).then(function(){
+      try{ localStorage.setItem('ratebook.firebase.migrated.v1','yes') }catch(e){}
+    });
+  }
+  function clone(o){ return JSON.parse(JSON.stringify(o)) }
+  function openPhotoDb(){ return new Promise(function(resolve){ try{ var r=indexedDB.open('ratebook-local',1); r.onupgradeneeded=function(){ if(!r.result.objectStoreNames.contains('photos')) r.result.createObjectStore('photos') }; r.onsuccess=function(){resolve(r.result)}; r.onerror=function(){resolve(null)} }catch(e){resolve(null)} }) }
+  var photoDb=null,photoBlobs={};
+  function dataUrlBlob(u){ var i=u.indexOf(','),m=/data:([^;]+)/.exec(u),bin=atob(u.slice(i+1)),a=new Uint8Array(bin.length); for(var k=0;k<bin.length;k++)a[k]=bin.charCodeAt(k); return new Blob([a],{type:m?m[1]:'image/jpeg'}) }
+  function blobDataUrl(b){ return new Promise(function(resolve,reject){ var r=new FileReader();r.onload=function(){resolve(r.result)};r.onerror=reject;r.readAsDataURL(b) }) }
+  function loadPhotos(){
+    return openPhotoDb().then(function(idb){ photoDb=idb; return new Promise(function(resolve){
+      if(photoDb){try{var tx=photoDb.transaction('photos'),req=tx.objectStore('photos').openCursor();req.onsuccess=function(){var c=req.result;if(c){photoBlobs[c.key]=c.value;window.__localBlobs[c.key]=URL.createObjectURL(c.value);c.continue()}else resolve()};req.onerror=resolve}catch(e){resolve()}}else resolve();
+    }) }).then(function(){ try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k.indexOf('ratebook.photo.')===0){var id=k.slice(14),b=dataUrlBlob(localStorage.getItem(k));photoBlobs[id]=b;window.__localBlobs[id]=URL.createObjectURL(b)}}}catch(e){} });
+  }
   var assets={
-    upload:function(b){ var id='p'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); return idbPut(id,b).then(function(){ blobs[id]=b; window.__localBlobs[id]=URL.createObjectURL(b); return {id:id,url:window.__localBlobs[id],sizeBytes:b.size,contentType:b.type} }) },
-    list:function(){ var n=0,by=0; try{ if(navigator.storage&&navigator.storage.estimate){ return navigator.storage.estimate().then(function(e){ Object.keys(blobs).forEach(function(k){ n++ }); return {assets:[],usage:{files:n,bytes:e.usage||0,maxFiles:100000,maxBytes:e.quota||1073741824}} }).catch(function(){ return {assets:[],usage:{files:Object.keys(blobs).length,bytes:0,maxFiles:100000,maxBytes:0}} }) } }catch(x){} Object.keys(blobs).forEach(function(k){ n++; by+=blobs[k].size }); return Promise.resolve({assets:[],usage:{files:n,bytes:by,maxFiles:100000,maxBytes:1073741824}}) },
-    delete:function(id){ delete blobs[id]; delete window.__localBlobs[id]; return idbDel(id).then(function(){ return {deleted:true} }) } };
-  var user={id:function(){return Promise.resolve('local')},me:function(){return Promise.resolve({id:'local',name:'You'})},
-    profiles:function(ids){ var o={}; [].concat(ids).forEach(function(i){ o[i]={id:i,name:'You',isMe:true} }); return Promise.resolve(o) },
-    isOwner:function(){return Promise.resolve(true)},canEdit:function(){return Promise.resolve(true)},can:function(){return Promise.resolve(true)}};
-  var downloads={save:function(a){ var b=(a.data instanceof Blob)? a.data : new Blob([a.data]); var u=URL.createObjectURL(b), l=document.createElement('a'); l.href=u; l.download=a.filename; document.body.appendChild(l); l.click(); setTimeout(function(){ l.remove(); URL.revokeObjectURL(u) },1500); return Promise.resolve({status:'saved'}) }};
-  var map={db:db,assets:assets,user:user,downloads:downloads};
-  function init(){ if(ready) return ready; try{ docs=JSON.parse(localStorage.getItem(KEY)||'{}')||{} }catch(e){ docs={} } ready=idbOpen().then(function(x){ idb=x; return idbAll() }).then(lsPhotos); return ready }
-  window.claude={use:function(n){ return init().then(function(){ return map[n]||null }) }};
-  document.addEventListener('DOMContentLoaded',function(){
-    var b=document.createElement('div'); b.setAttribute('role','note');
-    b.style.cssText='background:#FFF4D6;color:#5A4300;font:14px/1.4 system-ui,sans-serif;padding:8px 16px;text-align:center';
-    b.textContent='Local copy: rates and photos are saved only in this browser on this computer. They do not sync with the Claude link. Use "Download backup (CSV)" now and then.';
-    document.body.insertBefore(b,document.body.firstChild);
-  });
+    upload:function(blob){ var id='p'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); var save;
+      if(photoDb){ save=new Promise(function(resolve,reject){try{var tx=photoDb.transaction('photos','readwrite');tx.objectStore('photos').put(blob,id);tx.oncomplete=resolve;tx.onerror=reject;tx.onabort=reject}catch(e){reject(e)}}) }
+      else save=Promise.reject(new Error('Local photo database unavailable'));
+      return save.catch(function(){return blobDataUrl(blob).then(function(url){localStorage.setItem('ratebook.photo.'+id,url)})}).then(function(){photoBlobs[id]=blob;window.__localBlobs[id]=URL.createObjectURL(blob);return {id:id,url:window.__localBlobs[id],sizeBytes:blob.size,contentType:blob.type}});
+    },
+    list:function(){var n=Object.keys(photoBlobs).length,bytes=0;Object.keys(photoBlobs).forEach(function(k){bytes+=photoBlobs[k].size||0});return Promise.resolve({assets:[],usage:{files:n,bytes:bytes,maxFiles:100000,maxBytes:1073741824}})},
+    delete:function(id){delete photoBlobs[id];if(window.__localBlobs[id])URL.revokeObjectURL(window.__localBlobs[id]);delete window.__localBlobs[id];try{localStorage.removeItem('ratebook.photo.'+id)}catch(e){}return new Promise(function(resolve){if(!photoDb)return resolve({deleted:true});try{var tx=photoDb.transaction('photos','readwrite');tx.objectStore('photos').delete(id);tx.oncomplete=tx.onerror=tx.onabort=function(){resolve({deleted:true})}}catch(e){resolve({deleted:true})}})}
+  };
+  var user={
+    id:function(){return Promise.resolve(currentUser?currentUser.uid:null)},
+    me:function(){return Promise.resolve(currentUser?{id:currentUser.uid,name:currentUser.displayName||currentUser.email,email:currentUser.email}:null)},
+    profiles:function(ids){var out={};[].concat(ids||[]).forEach(function(id){out[id]={id:id,name:currentUser&&id===currentUser.uid?(currentUser.displayName||currentUser.email):'someone',isMe:!!(currentUser&&id===currentUser.uid)}});return Promise.resolve(out)},
+    isOwner:function(){return Promise.resolve(!!currentUser&&(currentUser.email||'').toLowerCase()===OWNER)},
+    canEdit:function(){return Promise.resolve(!!currentUser)},can:function(){return Promise.resolve(!!currentUser)}
+  };
+  var downloads={save:function(a){var b=a.data instanceof Blob?a.data:new Blob([a.data]);var u=URL.createObjectURL(b),l=document.createElement('a');l.href=u;l.download=a.filename;document.body.appendChild(l);l.click();setTimeout(function(){l.remove();URL.revokeObjectURL(u)},1500);return Promise.resolve({status:'saved'})}};
+  var map={db:null,assets:assets,user:user,downloads:downloads};
+  window.claude={use:function(name){return authReady().then(function(){if(name==='db')return db;if(name==='assets')return assets;if(name==='user')return user;if(name==='downloads')return downloads;return null})}};
+  loadPhotos().catch(function(e){console.warn('Local photos could not be loaded',e)});
 })();
 </script>
 </head><body>
@@ -462,7 +511,7 @@ html.big body{zoom:1.15}
           <label class="btn ghost small" for="f-photo" id="photoBtn">Choose from gallery</label>
           <button type="button" class="btn ghost small" id="photoRemove" hidden>Remove</button>
         </div>
-        <p class="err" id="photoNote" hidden>Photos can be added only when this page is opened from its Claude link, signed in as the owner or an Editor.</p>
+        <p class="err" id="photoNote" hidden>Photos are stored only in this browser on this device. They do not sync to other devices on the free plan.</p>
       </div>
       <div class="dupe" id="dupe" role="alert" hidden></div>
       <div class="field" id="labelField"><label for="f-label">Photo label (optional)</label><input id="f-label" maxlength="40" placeholder="For example, this size, cheaper grade"></div>
@@ -583,7 +632,7 @@ html.big body{zoom:1.15}
     list.className='';
     $('#quick').hidden=true;
     if(failed){
-      list.innerHTML='<div class="empty"><h2>Saving is not available here</h2><p>Open this page from your Claude account while signed in, and your rates will load and save.</p></div>';
+      list.innerHTML='<div class="empty"><h2>Saving is not available here</h2><p>Check your internet connection and sign in with sshringars@gmail.com using the Google button above.</p></div>';
       foot.hidden=true; add.hidden=true; $('#openList').hidden=true; $('#count').textContent=''; return;
     }
     if(!ready){ list.innerHTML='<div class="empty"><h2>Opening your rate book</h2><p>Loading saved rates and photos.</p></div>'; add.hidden=true; foot.hidden=true; return }
