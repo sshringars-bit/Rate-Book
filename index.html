@@ -1,6 +1,25 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<style>*,*::before,*::after{box-sizing:border-box}[hidden]{display:none!important}body{margin:0}img{max-width:100%}</style>
+<style>*,*::before,*::after{box-sizing:border-box}[hidden]{display:none!important}body{margin:0}img{max-width:100%}
+/* Usability layer: fast search, status, shortcuts and accessible floating controls */
+.rb-ux-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px}
+.rb-ux-pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;padding:6px 11px;background:var(--surface);color:var(--muted);font-size:12px;font-weight:650}
+.rb-ux-dot{width:8px;height:8px;border-radius:50%;background:#2d9b62;display:inline-block}
+.rb-ux-dot.off{background:#c27b2b}
+.rb-ux-btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;min-height:38px;padding:0 11px;font-size:13px;font-weight:650}
+.rb-clear-search{border:0;background:transparent;color:var(--muted);font-size:21px;line-height:1;width:36px;height:36px;border-radius:9px;flex:none}
+.rb-clear-search:hover,.rb-ux-btn:hover{background:var(--accent-soft);color:var(--accent)}
+.rb-top-btn{position:fixed;right:18px;bottom:calc(88px + env(safe-area-inset-bottom,0px));z-index:24;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);box-shadow:0 3px 14px rgba(0,0,0,.15);font-size:20px}
+.rb-help{position:fixed;inset:0;z-index:70;background:var(--scrim);display:grid;place-items:center;padding:18px}
+.rb-help-card{width:min(440px,100%);background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.25)}
+.rb-help-card h2{margin:0 0 12px;font-size:21px}.rb-help-card p{margin:8px 0;color:var(--muted);font-size:14px}.rb-help-card kbd{display:inline-block;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:2px 7px;background:var(--bg);font:600 12px ui-monospace,monospace;color:var(--ink)}
+@media(max-width:480px){.rb-ux-tools{gap:6px}.rb-ux-pill{font-size:11px}.rb-ux-btn{min-height:42px}.rb-top-btn{right:14px}}
+@media(prefers-reduced-motion:no-preference){.rb-top-btn{transition:opacity .18s,transform .18s}.rb-top-btn[hidden]{display:block;opacity:0;pointer-events:none;transform:translateY(8px)}}
+
+/* Universal search results */
+.rb-global-results{position:absolute;z-index:80;left:0;right:0;top:calc(100% + 7px);max-height:min(68vh,560px);overflow:auto;background:var(--surface,#fff);border:1px solid var(--line,#ddd);border-radius:16px;box-shadow:0 16px 44px rgba(0,0,0,.16);padding:8px;display:none}
+.rb-global-results.open{display:block}.rb-global-wrap{position:relative;z-index:30}.rb-global-head{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}.rb-global-item{display:flex;width:100%;text-align:left;align-items:flex-start;gap:10px;padding:11px 10px;border:0;border-radius:11px;background:transparent;color:var(--text,inherit);cursor:pointer}.rb-global-item:hover,.rb-global-item:focus{background:var(--accent-soft,#f4eee8);outline:0}.rb-global-icon{width:32px;height:32px;flex:none;border-radius:10px;display:grid;place-items:center;background:var(--accent-soft,#f4eee8);color:var(--accent,#805039);font-weight:800}.rb-global-copy{min-width:0;flex:1}.rb-global-title{font-weight:750;overflow-wrap:anywhere}.rb-global-sub{font-size:12px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}.rb-global-empty{padding:18px 12px;color:var(--muted);font-size:14px}.rb-global-detail{position:fixed;inset:0;z-index:150;background:rgba(0,0,0,.48);display:none;align-items:flex-end;justify-content:center;padding:12px}.rb-global-detail.open{display:flex}.rb-global-detail-card{width:min(100%,560px);max-height:82vh;overflow:auto;background:var(--surface,#fff);color:var(--text,inherit);border-radius:20px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.24)}.rb-global-detail-card pre{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.5 system-ui;color:var(--muted)}.search{position:relative}
+</style>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
@@ -513,6 +532,11 @@ html[data-density="comfortable"] .card{min-height:104px}
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q" type="search" placeholder="Search material, vendor or note" autocomplete="off" aria-label="Search rates">
     </label>
+    <div class="rb-ux-tools" aria-label="Quick tools">
+      <span class="rb-ux-pill" role="status" aria-live="polite"><i class="rb-ux-dot" id="rbNetDot"></i><span id="rbNetText">Checking connection…</span></span>
+      <button type="button" class="rb-ux-btn" id="rbHelpOpen" aria-haspopup="dialog">⌨ Shortcuts &amp; help</button>
+      <button type="button" class="rb-ux-btn" id="rbClearSearch">Clear search</button>
+    </div>
     <div class="seg wrap" role="group" aria-label="Sort and filter materials">
       <button type="button" data-sort="recent" aria-pressed="true">Recently updated</button>
       <button type="button" data-sort="az" aria-pressed="false">A to Z</button>
@@ -534,6 +558,7 @@ html[data-density="comfortable"] .card{min-height:104px}
     <button type="button" class="link" id="openChanges">What changed this month</button>
     <button type="button" class="link" id="openRebuy">Rebuy reminders</button>
     <button type="button" class="link" id="openCost">Product costing</button>
+    <button type="button" class="link" id="openCalc">GST &amp; profit calculator</button>
     <button type="button" class="link" id="openQuote">Customer quotation</button>
     <button type="button" class="link" id="openWish">Wish list</button>
     <button type="button" class="link" id="openSettings">Settings</button>
@@ -546,6 +571,35 @@ html[data-density="comfortable"] .card{min-height:104px}
   </footer>
 </div>
 
+<section id="calcSheet" class="sheet" hidden aria-modal="true" role="dialog" aria-labelledby="calcTitle">
+  <div class="scrim" data-close="calcSheet"></div>
+  <div class="panel" id="calcPanel">
+    <div class="panelhead"><div><p class="eyebrow">SELLING &amp; TAX TOOLS</p><h2 id="calcTitle">GST &amp; profit calculator</h2></div><button type="button" class="x" data-close="calcSheet" aria-label="Close">&times;</button></div>
+    <p class="hint">Estimate your product profit after GST, marketplace fees and fulfilment costs. This is a planning calculator, not a tax filing statement.</p>
+    <div class="calc-grid">
+      <label class="field"><span>Purchase / making cost (₹)</span><input id="calcCost" type="number" min="0" step="0.01" value="100"></label>
+      <label class="field"><span>Selling price (₹)</span><input id="calcSale" type="number" min="0" step="0.01" value="299"></label>
+      <label class="field"><span>GST rate (%)</span><select id="calcGst"><option value="0">0%</option><option value="5">5%</option><option value="12">12%</option><option value="18" selected>18%</option><option value="28">28%</option></select></label>
+      <label class="field"><span>Marketplace fee (%)</span><input id="calcFee" type="number" min="0" max="100" step="0.1" value="15"></label>
+      <label class="field"><span>Packaging + shipping (₹)</span><input id="calcExtra" type="number" min="0" step="0.01" value="25"></label>
+      <label class="field"><span>Sale price entered as</span><select id="calcInclusive"><option value="yes" selected>GST inclusive</option><option value="no">GST exclusive</option></select></label>
+      <label class="field"><span>GST split</span><select id="calcSplit"><option value="intra" selected>CGST + SGST</option><option value="inter">IGST</option></select></label>
+    </div>
+    <div class="calc-results" aria-live="polite">
+      <div><span>Taxable sale value</span><b id="calcTaxable">₹0.00</b></div>
+      <div><span>GST on sale</span><b id="calcTax">₹0.00</b></div>
+      <div id="calcSplitRow"><span>CGST + SGST</span><b id="calcSplitValue">₹0.00 + ₹0.00</b></div>
+      <div><span>Marketplace fee estimate</span><b id="calcFeeValue">₹0.00</b></div>
+      <div class="calc-profit"><span>Estimated profit</span><b id="calcProfit">₹0.00</b></div>
+      <div><span>Profit margin on taxable sale</span><b id="calcMargin">0%</b></div>
+    </div>
+    <p class="hint" id="calcNote">Assumes marketplace fee is charged on the entered selling price. Actual fee bases and GST input credits may differ by platform and invoice.</p>
+    <div class="actions"><button type="button" class="btn" id="calcCopy">Copy calculation</button><button type="button" class="btn ghost" data-close="calcSheet">Close</button></div>
+  </div>
+</section>
+<style>
+#calcSheet{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:14px}#calcSheet[hidden]{display:none!important}#calcSheet .scrim{position:absolute;inset:0;background:#17130f99}#calcSheet .panel{position:relative;width:min(620px,100%);max-height:92dvh;overflow:auto;background:var(--panel,#fff);color:var(--ink,#29231f);border-radius:22px;padding:20px;box-shadow:0 18px 60px #0003}#calcSheet .panelhead{display:flex;justify-content:space-between;align-items:center;gap:12px}#calcSheet h2{margin:0;font-size:1.35rem}#calcSheet .eyebrow{margin:0 0 5px;font-size:11px;letter-spacing:.12em;font-weight:800;opacity:.65}#calcSheet .calc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0}#calcSheet .field{display:grid;gap:6px;font-size:13px;font-weight:650}#calcSheet .field input,#calcSheet .field select{width:100%;min-width:0;border:1px solid var(--line,#ddd);border-radius:11px;padding:12px;background:var(--bg,#fff);color:inherit;font:inherit}#calcSheet .calc-results{border:1px solid var(--line,#ddd);border-radius:15px;padding:12px 14px;display:grid;gap:0}#calcSheet .calc-results>div{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line,#ddd);font-size:14px}#calcSheet .calc-results>div:last-child{border:0}#calcSheet .calc-profit{font-size:17px!important;color:var(--accent,#8e4a2e)}#calcSheet .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}@media(max-width:430px){#calcSheet{padding:8px}#calcSheet .panel{padding:16px;border-radius:17px}#calcSheet .calc-grid{gap:9px}#calcSheet .field{font-size:12px}}
+</style>
 <input id="quickCam" class="vh" type="file" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true">
 <button type="button" class="fab cam" id="quick" aria-label="Scan a photo to check your saved items" hidden>
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
@@ -1453,7 +1507,7 @@ html[data-density="comfortable"] .card{min-height:104px}
       'td,th{padding:12px 6px;border-bottom:1px solid #e6ded6;text-align:left;font-size:16px}th{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#7a6a60}td.r,th.r{text-align:right}td.b{font-weight:700}'+
       '.tot td{border-bottom:0;font-weight:700;font-size:18px}.ft{text-align:center;color:#8E4A2E;font-size:13px;letter-spacing:.12em;padding:8px 12px 28px;font-family:system-ui,sans-serif}'+
       '@media print{body{background:#fff}}'+
-      '</style></head><body><div class="wrap"><div class="hd"><img src="'+LOGO_L+'" alt="'+esc(shopName())+'"></div>'+inner+'<div class="ft">CRAFTED WITH LOVE, MADE BY HAND</div></div></body></html>';
+      '</style></head><body><div class="wrap"><div class="hd"><img src="'+LOGO_L+'" alt="'+esc(shopName())+'"></div>'+inner+'<div class="ft">CRAFTED WITH LOVE, MADE BY HAND</div></div>\n</body></html>';
   }
   function priceListHtml(){
     var items=priceItems();
@@ -2020,8 +2074,22 @@ html[data-density="comfortable"] .card{min-height:104px}
   /* ---------- events ---------- */
   window.addEventListener('error',function(e){ try{ toast('Something went wrong: '+String((e&&e.message)||'error').slice(0,80)) }catch(x){} });
   window.addEventListener('unhandledrejection',function(e){ try{ var r=e&&e.reason; toast('Something went wrong: '+String((r&&(r.code||r.message))||'error').slice(0,80)) }catch(x){} });
+  function calcMoney(n){ return '₹'+(Number.isFinite(n)?n:0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}) }
+  function updateCalc(){
+    var cost=Math.max(0,Number($('#calcCost').value)||0), sale=Math.max(0,Number($('#calcSale').value)||0), gst=Math.max(0,Number($('#calcGst').value)||0), fee=Math.min(100,Math.max(0,Number($('#calcFee').value)||0)), extra=Math.max(0,Number($('#calcExtra').value)||0);
+    var inclusive=$('#calcInclusive').value==='yes', taxable=inclusive?sale/(1+gst/100):sale, tax=inclusive?sale-taxable:taxable*gst/100, feeValue=sale*fee/100, profit=taxable-cost-extra-feeValue, margin=taxable?profit/taxable*100:0;
+    $('#calcTaxable').textContent=calcMoney(taxable); $('#calcTax').textContent=calcMoney(tax); $('#calcFeeValue').textContent=calcMoney(feeValue); $('#calcProfit').textContent=calcMoney(profit); $('#calcMargin').textContent=margin.toFixed(1)+'%';
+    $('#calcProfit').style.color=profit<0?'#c0392b':'';
+    $('#calcSplitRow').firstElementChild.textContent=$('#calcSplit').value==='inter'?'IGST':'CGST + SGST';
+    $('#calcSplitValue').textContent=$('#calcSplit').value==='inter'?calcMoney(tax):calcMoney(tax/2)+' + '+calcMoney(tax/2);
+    $('#calcNote').textContent='Estimated profit excludes input-tax-credit adjustments, returns, discounts and other platform-specific charges. Verify the fee basis and applicable GST with your invoices.';
+    window.__rateCalcSummary={cost:cost,sale:sale,taxable:taxable,gst:tax,fee:feeValue,extra:extra,profit:profit,margin:margin,split:$('#calcSplit').value};
+  }
+  ['calcCost','calcSale','calcGst','calcFee','calcExtra','calcInclusive','calcSplit'].forEach(function(id){ $('#'+id).addEventListener('input',updateCalc); $('#'+id).addEventListener('change',updateCalc) });
+  $('#calcCopy').addEventListener('click',function(){ var c=window.__rateCalcSummary||{}; var txt='Shubh Shringar Creations - Profit Estimate\nTaxable sale: '+calcMoney(c.taxable)+'\nGST: '+calcMoney(c.gst)+'\nMarketplace fee: '+calcMoney(c.fee)+'\nOther costs: '+calcMoney(c.extra)+'\nEstimated profit: '+calcMoney(c.profit)+'\nMargin: '+(c.margin||0).toFixed(1)+'%'; copyText(txt); });
+
   document.addEventListener('click',function(ev){
-    var t=ev.target.closest('[data-wopen],[data-wadd],[data-wnext],[data-wrate],[data-wdel],[data-wcopy],#openWish,[data-pref],[data-setshop],#openSettings,[data-qadd],[data-qrem],[data-qcopy],[data-qhtml],[data-qclear],#openQuote,[data-plist],[data-paid],[data-paidall],#openDues,[data-same],[data-copychanges],[data-pcopy],#openChanges,[data-setevery],[data-clearevery],[data-prod],[data-prodnew],[data-padd],[data-prem],[data-psave],[data-pback],[data-pdel],#openVendors,#openRebuy,#openCost,#photoBackup,[data-impfile],[data-impread],[data-impgo],#openImport,[data-delitem],[data-delitemyes],[data-delitemno],[data-view],#qfBtn,[data-scanai],[data-scanadd],[data-scannew],[data-scancam],[data-scangallery],[data-flag],[data-settarget],[data-targetlowest],[data-targetclear],[data-list],[data-got],[data-unlist],[data-copylist],[data-clearticked],[data-upfilter],#openList,#openSpend,[data-fav],[data-favfilter],[data-copyphone],[data-pickmat],#quick,[data-pickvendor],[data-pickunit],[data-status],[data-tag],[data-copy],#copyAll,[data-usematch],[data-dupekeep],[data-dupedrop],[data-close],[data-key],[data-addfor],[data-edit],[data-del],[data-photo],#emptyAdd,#add,#export,#lb,[data-sort]');
+    var t=ev.target.closest('[data-wopen],[data-wadd],[data-wnext],[data-wrate],[data-wdel],[data-wcopy],#openWish,[data-pref],[data-setshop],#openSettings,[data-qadd],[data-qrem],[data-qcopy],[data-qhtml],[data-qclear],#openQuote,[data-plist],[data-paid],[data-paidall],#openDues,[data-same],[data-copychanges],[data-pcopy],#openChanges,[data-setevery],[data-clearevery],[data-prod],[data-prodnew],[data-padd],[data-prem],[data-psave],[data-pback],[data-pdel],#openVendors,#openRebuy,#openCost,#openCalc,#photoBackup,[data-impfile],[data-impread],[data-impgo],#openImport,[data-delitem],[data-delitemyes],[data-delitemno],[data-view],#qfBtn,[data-scanai],[data-scanadd],[data-scannew],[data-scancam],[data-scangallery],[data-flag],[data-settarget],[data-targetlowest],[data-targetclear],[data-list],[data-got],[data-unlist],[data-copylist],[data-clearticked],[data-upfilter],#openList,#openSpend,[data-fav],[data-favfilter],[data-copyphone],[data-pickmat],#quick,[data-pickvendor],[data-pickunit],[data-status],[data-tag],[data-copy],#copyAll,[data-usematch],[data-dupekeep],[data-dupedrop],[data-close],[data-key],[data-addfor],[data-edit],[data-del],[data-photo],#emptyAdd,#add,#export,#lb,[data-sort]');
     if(!t) return;
     var oops=function(e){ toast('Could not save'+(e&&(e.code||e.message)?' ('+String(e.code||e.message).slice(0,60)+')':'')+'. Try again.') };
     var failMsg=function(what,e){ toast('Could not '+what+(e&&(e.code||e.message)?' ('+String(e.code||e.message).slice(0,60)+')':'')+'. Try again.') };
@@ -2099,6 +2167,7 @@ html[data-density="comfortable"] .card{min-height:104px}
     if(t.id==='openVendors'){ openTool('vendors'); return }
     if(t.id==='openRebuy'){ openTool('rebuy'); return }
     if(t.id==='openCost'){ openTool('cost'); return }
+    if(t.id==='openCalc'){ $('#calcSheet').hidden=false; updateCalc(); return }
     if(t.id==='photoBackup'){ backupPhotos(); return }
     if(t.dataset.close==='toolSheet'){ closeTool(); return }
     if(t.dataset.setevery){
@@ -2204,6 +2273,7 @@ html[data-density="comfortable"] .card{min-height:104px}
       dupeTok++; renderDupe([]); formBlob=null; F.photo.value=''; F.photoCam.value=''; formPhotoId=prevPhotoId; formSig=prevSig;
       setPreview(formPhotoId? photoUrl(formPhotoId): null); toast('New photo removed'); return;
     }
+    if(t.dataset.close==='calcSheet'){ $('#calcSheet').hidden=true; return }
     if(t.dataset.close==='detail'){ pendingOpen=false; armedDel=null; armedItem=null; openKey=null; $('#detail').hidden=true; return }
     if(t.dataset.close==='formSheet'){ closeForm(); return }
     if(t.id==='qfBtn'){ runQuickFill(); return }
@@ -2243,6 +2313,7 @@ html[data-density="comfortable"] .card{min-height:104px}
   document.addEventListener('keydown',function(ev){
     if(ev.key!=='Escape') return;
     if(!$('#lb').hidden){ $('#lb').hidden=true; return }
+    if(!$('#calcSheet').hidden){ $('#calcSheet').hidden=true; return }
     if(!$('#formSheet').hidden){ closeForm(); return }
     if(!$('#detail').hidden){ pendingOpen=false; openKey=null; $('#detail').hidden=true; return }
     if(!$('#importSheet').hidden){ $('#importSheet').hidden=true; return }
@@ -2315,7 +2386,92 @@ html[data-density="comfortable"] .card{min-height:104px}
       assets.load(rows.map(function(r){return r.photo}).filter(Boolean)).then(function(){ ready=true; renderAll(); refreshStorage() }).catch(function(e){ console.warn('Photo sync could not finish:',e); ready=true; renderAll() });
     },function(e){ failed=true; console.error('Rate sync failed:',e); renderList() });
   }).catch(function(){ failed=true; renderList() });
+  // Expose a read-only snapshot for the universal search layer.
+  window.__rbGlobalSearchData=function(){
+    return {rates:rows||[], materials:items||{}, vendors:vendors||{}, wishes:wishes||{}, products:products||{}, shop:shop||{}};
+  };
 })();
 </script>
 
+<script>
+/* Small, non-invasive convenience features. These do not change or migrate saved records. */
+(function(){
+  'use strict';
+  function $(id){return document.getElementById(id)}
+  var q=$('q'), help=null, topBtn=null;
+  function updateNetwork(){
+    var online=navigator.onLine!==false, dot=$('rbNetDot'), label=$('rbNetText');
+    if(dot) dot.classList.toggle('off',!online);
+    if(label) label.textContent=online?'Internet available':'Offline — changes may not sync';
+  }
+  window.addEventListener('online',updateNetwork); window.addEventListener('offline',updateNetwork); updateNetwork();
+  if(q){
+    $('rbClearSearch').addEventListener('click',function(){q.value='';q.dispatchEvent(new Event('input',{bubbles:true}));q.focus();});
+    q.addEventListener('keydown',function(e){if(e.key==='Escape'&&q.value){q.value='';q.dispatchEvent(new Event('input',{bubbles:true}));}});
+  }
+  help=document.createElement('div'); help.className='rb-help'; help.hidden=true; help.setAttribute('role','presentation');
+  help.innerHTML='<section class="rb-help-card" role="dialog" aria-modal="true" aria-labelledby="rbHelpTitle"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h2 id="rbHelpTitle">Quick help</h2><button type="button" class="x" id="rbHelpClose" aria-label="Close help">×</button></div><p><kbd>/</kbd> or <kbd>Ctrl</kbd> + <kbd>K</kbd> — jump to search</p><p><kbd>Esc</kbd> — clear search or close the open panel</p><p><kbd>↑</kbd> button — return to the top of the page</p><p>Use the category chips and vendor filter to narrow your rates. Tap a material card to view its history, vendors and saved details.</p><p>Connection status only reports whether your device has internet access; it does not guarantee that cloud sync has completed.</p><button type="button" class="btn" id="rbHelpDone" style="width:100%;margin-top:8px">Got it</button></section>';
+  document.body.appendChild(help);
+  function closeHelp(){help.hidden=true}
+  $('rbHelpOpen').addEventListener('click',function(){help.hidden=false;$('rbHelpClose').focus()});
+  $('rbHelpClose').addEventListener('click',closeHelp); $('rbHelpDone').addEventListener('click',closeHelp);
+  help.addEventListener('click',function(e){if(e.target===help)closeHelp()});
+  topBtn=document.createElement('button'); topBtn.type='button'; topBtn.className='rb-top-btn'; topBtn.textContent='↑'; topBtn.setAttribute('aria-label','Back to top'); topBtn.hidden=true; document.body.appendChild(topBtn);
+  function scrollState(){topBtn.hidden=window.scrollY<420}
+  window.addEventListener('scroll',scrollState,{passive:true}); scrollState();
+  topBtn.addEventListener('click',function(){window.scrollTo({top:0,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});});
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'&&!help.hidden){closeHelp();return}
+    if((e.key==='/'||((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'))&&!e.altKey){
+      var tag=(document.activeElement&&document.activeElement.tagName||'').toLowerCase();
+      if(tag==='input'||tag==='textarea'||tag==='select'||document.activeElement.isContentEditable)return;
+      e.preventDefault(); if(q){q.focus();q.select()}
+    }
+  });
+
+  // Search across every live Rate Book collection, not just material rates.
+  if(q){
+    var wrap=q.closest('.search');
+    if(wrap){
+      wrap.classList.add('rb-global-wrap');
+      var panel=document.createElement('div'); panel.className='rb-global-results'; panel.id='rbGlobalResults'; panel.setAttribute('role','listbox'); wrap.appendChild(panel);
+      var detail=document.createElement('div'); detail.className='rb-global-detail'; detail.innerHTML='<section class="rb-global-detail-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h3 style="margin:0" id="rbGlobalDetailTitle">Details</h3><button type="button" class="x" id="rbGlobalDetailClose" aria-label="Close details">×</button></div><pre id="rbGlobalDetailBody"></pre></section>'; document.body.appendChild(detail);
+      var lastResults=[];
+      function flatten(obj,out,depth){
+        out=out||[]; depth=depth||0; if(obj==null||depth>5)return out;
+        if(typeof obj==='string'||typeof obj==='number'||typeof obj==='boolean'){out.push(String(obj));return out}
+        if(Array.isArray(obj)){obj.slice(0,150).forEach(function(v){flatten(v,out,depth+1)});return out}
+        if(typeof obj==='object'){Object.keys(obj).forEach(function(k){if(/photo|image|base64|blob|password|token/i.test(k))return;out.push(k);flatten(obj[k],out,depth+1)});}
+        return out;
+      }
+      function niceType(t){return ({rates:'Rate / Material',materials:'Material details',vendors:'Vendor',wishes:'Wish list',products:'Product',shop:'Shop settings',local:'Saved app data'})[t]||t}
+      function collect(){
+        var d=window.__rbGlobalSearchData?window.__rbGlobalSearchData():{}; var out=[];
+        (d.rates||[]).forEach(function(v){out.push({type:'rates',title:v.material||'Untitled rate',sub:[v.vendor,v.rate!=null?'₹'+v.rate+'/'+(v.unit||'unit'):'',v.date].filter(Boolean).join(' · '),data:v,hay:flatten(v).join(' ')})});
+        [['materials',d.materials],['vendors',d.vendors],['wishes',d.wishes],['products',d.products]].forEach(function(pair){var type=pair[0],obj=pair[1]||{};Object.keys(obj).forEach(function(k){var v=obj[k]||{};var title=v.name||v.material||v.title||v.vendor||v.product||k;out.push({type:type,title:String(title),sub:niceType(type)+' · '+k,data:v,hay:k+' '+flatten(v).join(' ')})})});
+        if(d.shop&&Object.keys(d.shop).length)out.push({type:'shop',title:d.shop.name||'Shop settings',sub:'Business profile and settings',data:d.shop,hay:flatten(d.shop).join(' ')});
+        // Include JSON-backed local app settings/records, excluding browser/system keys and large binary payloads.
+        try{for(var i=0;i<localStorage.length;i++){var key=localStorage.key(i);if(!key||!/rate|shop|vendor|product|wish|expense|cost|setting|quote/i.test(key))continue;var raw=localStorage.getItem(key);if(!raw||raw.length>500000)continue;try{var val=JSON.parse(raw);if(val&&typeof val==='object')out.push({type:'local',title:key,sub:'Local saved data',data:val,hay:key+' '+flatten(val).join(' ')})}catch(e){}}}catch(e){}
+        return out;
+      }
+      function showResults(){
+        var term=(q.value||'').trim().toLowerCase(); if(!term){panel.classList.remove('open');return}
+        var all=collect(); var matches=all.filter(function(x){return (x.title+' '+x.sub+' '+x.hay).toLowerCase().indexOf(term)>=0}).slice(0,40);lastResults=matches;
+        panel.innerHTML=''; var head=document.createElement('div');head.className='rb-global-head';head.textContent='Search everything · '+matches.length+' result'+(matches.length===1?'':'s');panel.appendChild(head);
+        if(!matches.length){var empty=document.createElement('div');empty.className='rb-global-empty';empty.textContent='No matching records found across rates, vendors, products, wish list and saved settings.';panel.appendChild(empty)}
+        matches.forEach(function(x,i){var b=document.createElement('button');b.type='button';b.className='rb-global-item';b.setAttribute('role','option');var icon=document.createElement('span');icon.className='rb-global-icon';icon.textContent=({rates:'₹',materials:'M',vendors:'V',wishes:'☆',products:'P',shop:'S',local:'…'})[x.type]||'•';var copy=document.createElement('span');copy.className='rb-global-copy';var title=document.createElement('span');title.className='rb-global-title';title.textContent=x.title;var sub=document.createElement('span');sub.className='rb-global-sub';sub.textContent=x.sub+' · '+niceType(x.type);copy.append(title,sub);b.append(icon,copy);b.addEventListener('click',function(){panel.classList.remove('open');if(x.type==='rates'){q.value=x.title;q.dispatchEvent(new Event('input',{bubbles:true}));var card=document.querySelector('#list .card');if(card)card.scrollIntoView({behavior:'smooth',block:'center'});}else{$('#rbGlobalDetailTitle').textContent=x.title;var safe={};Object.keys(x.data||{}).forEach(function(k){if(!/photo|image|base64|blob|password|token/i.test(k))safe[k]=x.data[k]});$('#rbGlobalDetailBody').textContent=JSON.stringify(safe,null,2);detail.classList.add('open')}});panel.appendChild(b)});
+        panel.classList.add('open');
+      }
+      q.addEventListener('input',showResults);
+      q.addEventListener('focus',function(){if(q.value.trim())showResults()});
+      document.addEventListener('click',function(e){if(!wrap.contains(e.target))panel.classList.remove('open')});
+      detail.addEventListener('click',function(e){if(e.target===detail)detail.classList.remove('open')});
+      $('#rbGlobalDetailClose').addEventListener('click',function(){detail.classList.remove('open')});
+      document.addEventListener('keydown',function(e){if(e.key==='Escape'){panel.classList.remove('open');detail.classList.remove('open')}});
+      // Clarify the expanded scope directly in the search field.
+      q.placeholder='Search everything: rates, vendors, products, wish list…'; q.setAttribute('aria-label','Search all Rate Book records');
+    }
+  }
+})();
+</script>
 </body></html>
